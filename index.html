@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoH Case Triage Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f4f4f0; color: #1a1a18; min-height: 100vh; padding: 24px 16px; }
+  .container { max-width: 780px; margin: 0 auto; }
+
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 16px; }
+
+  /* Language switcher */
+  .lang-bar { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .lang-btn { padding: 8px 18px; border-radius: 999px; border: 1.5px solid #ccc; background: #fff; font-size: 14px; cursor: pointer; font-weight: 600; transition: all 0.15s; }
+  .lang-btn:hover { border-color: #888; }
+  .lang-btn.active { background: #1a1a18; color: #fff; border-color: #1a1a18; }
+
+  /* Score dashboard */
+  .dashboard { background: #fff; border-radius: 12px; border: 1px solid #e0e0d8; padding: 20px; margin-bottom: 28px; position: sticky; top: 12px; z-index: 10; box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+  .dash-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .score-big { font-size: 42px; font-weight: 700; line-height: 1; }
+  .band-pill { font-size: 14px; font-weight: 700; padding: 6px 18px; border-radius: 999px; letter-spacing: 0.5px; }
+  .band-HIGH    { background: #dc2626; color: #fff; }
+  .band-MEDIUM  { background: #f59e0b; color: #fff; }
+  .band-LOW     { background: #16a34a; color: #fff; }
+  .band-UNSCORED{ background: #f0efeb; color: #666; }
+
+  .score-big.score-HIGH   { color: #dc2626; }
+  .score-big.score-MEDIUM { color: #d97706; }
+  .score-big.score-LOW    { color: #16a34a; }
+
+  .factor-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+  @media(max-width:520px){ .factor-bars { grid-template-columns: 1fr; } }
+  .factor-row { display: flex; flex-direction: column; gap: 3px; }
+  .factor-label { font-size: 11px; color: #888; display: flex; justify-content: space-between; }
+  .bar-track { height: 6px; background: #f0efeb; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.35s ease; }
+
+  .response-banner { font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px; margin-top: 12px; border-left: 4px solid transparent; }
+  .rb-HIGH    { background: #fef2f2; color: #991b1b; border-left-color: #dc2626; }
+  .rb-MEDIUM  { background: #fffbeb; color: #92400e; border-left-color: #f59e0b; }
+  .rb-LOW     { background: #f0fdf4; color: #14532d; border-left-color: #16a34a; }
+  .rb-UNSCORED{ background: #f0efeb; color: #666; border-left-color: transparent; }
+
+  .dashboard-HIGH   { border: 2px solid #dc2626 !important; }
+  .dashboard-MEDIUM { border: 2px solid #f59e0b !important; }
+  .dashboard-LOW    { border: 2px solid #16a34a !important; }
+
+  /* Section cards */
+  .section { background: #fff; border-radius: 12px; border: 1px solid #e0e0d8; padding: 20px; margin-bottom: 16px; }
+  .section-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; margin-bottom: 10px; }
+  .tag-safety      { background: #fde8e8; color: #b91c1c; }
+  .tag-urgency     { background: #fef3c7; color: #92400e; }
+  .tag-vulnerability { background: #ede9fe; color: #5b21b6; }
+  .tag-complexity  { background: #fee2e2; color: #9a3412; }
+  .tag-legal       { background: #dbeafe; color: #1e3a8a; }
+  .tag-engagement  { background: #ccfbf1; color: #065f46; }
+  .tag-continuity  { background: #dcfce7; color: #14532d; }
+
+  .q-text { font-size: 16px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; }
+  .q-hint { font-size: 12px; color: #888; margin-bottom: 14px; }
+
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt-label { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1.5px solid #e0e0d8; border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; font-size: 14px; line-height: 1.4; }
+  .opt-label:hover { border-color: #b0b0a8; background: #f9f9f7; }
+  .opt-label input { display: none; }
+  .opt-label.selected { border-color: #3b5bdb; background: #eef2ff; }
+  .opt-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; transition: border-color 0.15s, background 0.15s; }
+  .opt-label.selected .opt-dot { border-color: #3b5bdb; background: #3b5bdb; }
+  .opt-score { margin-left: auto; font-size: 11px; font-weight: 700; color: #aaa; min-width: 28px; text-align: right; flex-shrink: 0; }
+  .opt-label.selected .opt-score { color: #3b5bdb; }
+
+  .sub-q { margin-top: 12px; padding: 14px; background: #f8f8f5; border-radius: 8px; border-left: 3px solid #e0e0d8; }
+  .sub-q .q-text { font-size: 14px; }
+  .sub-q .options .opt-label { font-size: 13px; padding: 8px 12px; }
+
+  .reset-btn { margin-top: 24px; padding: 10px 24px; background: transparent; border: 1.5px solid #ccc; border-radius: 8px; font-size: 14px; cursor: pointer; color: #555; }
+  .reset-btn:hover { border-color: #888; color: #222; }
+
+  .flag-alert { display: none; background: #fde8e8; border: 1.5px solid #fca5a5; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; color: #b91c1c; font-weight: 600; }
+  .flag-alert.show { display: block; }
+
+  /* Tamil & Chinese font bump */
+  .lang-ta .q-text, .lang-ta .opt-label { font-size: 15px; }
+  .lang-zh .q-text, .lang-zh .opt-label { font-size: 15px; }
+
+  /* FORM MODE (beneficiary view) */
+  .form-mode .dashboard    { display: none !important; }
+  .form-mode .section-tag  { display: none !important; }
+  .form-mode .opt-score    { display: none !important; }
+  .form-mode .flag-alert   { display: none !important; }
+  .form-mode .reset-btn    { display: none !important; }
+  .form-mode h1            { font-size: 22px; }
+
+  .progress-bar-wrap { background: #e0e0d8; border-radius: 4px; height: 6px; margin-bottom: 20px; }
+  .progress-bar-fill { height: 6px; border-radius: 4px; background: #1a1a18; transition: width 0.3s ease; }
+
+  .submit-btn { margin-top: 8px; width: 100%; padding: 14px; background: #1a1a18; color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+  .submit-btn:hover { background: #333; }
+  .submit-btn:disabled { background: #ccc; color: #888; cursor: not-allowed; }
+
+  .thankyou { display: none; text-align: center; padding: 64px 24px; }
+  .thankyou.show { display: block; }
+  .thankyou-icon { font-size: 64px; margin-bottom: 20px; }
+  .thankyou h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+  .thankyou p { font-size: 15px; color: #555; line-height: 1.7; max-width: 440px; margin: 0 auto; }
+
+  .admin-banner { background: #1a1a18; color: #fff; font-size: 12px; font-weight: 600; text-align: center; padding: 7px; letter-spacing: 0.8px; }
+</style>
+</head>
+<body>
+<div class="admin-banner" id="admin-banner">⚙ STAFF VIEW — scores and weights visible · Share the ?mode=form URL with beneficiaries</div>
+
+<div class="container">
+  <h1 id="ui-title">RoH Case Triage Form</h1>
+  <p class="subtitle" id="ui-subtitle">Answer each question. The priority score updates automatically.</p>
+
+  <!-- LANGUAGE SWITCHER -->
+  <div class="lang-bar">
+    <button class="lang-btn active" onclick="setLang('en')">English</button>
+    <button class="lang-btn" onclick="setLang('ms')">Bahasa Melayu</button>
+    <button class="lang-btn" onclick="setLang('zh')">中文</button>
+    <button class="lang-btn" onclick="setLang('ta')">தமிழ்</button>
+  </div>
+
+  <!-- PROGRESS BAR (form mode only) -->
+  <div class="progress-bar-wrap" id="progress-wrap" style="display:none">
+    <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+
+  <!-- SAFETY FLAG (admin only) -->
+  <div class="flag-alert" id="safety-flag">⚠️ <span id="flag-text">Safety concern flagged — this case requires immediate human review.</span></div>
+
+  <!-- DASHBOARD (admin only) -->
+  <div class="dashboard">
+    <div class="dash-top">
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:2px;" id="ui-score-label">PRIORITY SCORE</div>
+        <div class="score-big" id="total-score">—</div>
+      </div>
+      <div style="text-align:right">
+        <div class="band-pill band-UNSCORED" id="band-pill">Not yet scored</div>
+        <div class="response-banner rb-UNSCORED" id="response-banner">Complete all questions to score</div>
+      </div>
+    </div>
+    <div class="factor-bars" id="factor-bars"></div>
+  </div>
+
+  <!-- QUESTIONS -->
+  <div id="questions-container"></div>
+
+  <!-- SUBMIT BUTTON (form mode only) -->
+  <button class="submit-btn" id="submit-btn" style="display:none" disabled onclick="submitForm()">
+    <span id="submit-label">Submit</span>
+  </button>
+
+  <button class="reset-btn" id="reset-btn" onclick="resetForm()">↺ Reset</button>
+
+  <!-- THANK YOU (form mode only) -->
+  <div class="thankyou" id="thankyou">
+    <div class="thankyou-icon">✅</div>
+    <h2 id="ty-title">Thank you for submitting</h2>
+    <p id="ty-body">We have received your information. Our team will be in touch with you soon.</p>
+  </div>
+</div>
+
+<script>
+// ─── TRANSLATIONS ────────────────────────────────────────────────────────────
+const T = {
+  en: {
+    title: "RoH Case Triage Form",
+    subtitle: "Answer each question. The priority score updates automatically.",
+    scoreLabel: "PRIORITY SCORE",
+    flagText: "Safety concern flagged — this case requires immediate human review.",
+    reset: "↺ Reset form",
+    submit: "Submit →",
+    tyTitle: "Thank you for submitting",
+    tyBody: "We have received your information. Our team will be in touch with you soon.",
+    formSubtitle: "Please answer all questions so we can understand your situation.",
+    remaining: (n) => `${n} question${n!==1?'s':''} remaining`,
+    bandLabels: { HIGH:"HIGH", MEDIUM:"MEDIUM", LOW:"LOW", UNSCORED:"Not yet scored" },
+    response: {
+      HIGH:   "⏱ First contact within 1 day",
+      MEDIUM: "⏱ First contact within 3 days",
+      LOW:    "⏱ First contact within 10 days",
+      UNSCORED: "Complete all questions to score"
+    },
+    factors: ["Safety","Urgency","Vulnerability","Complexity","Legal duty","Engagement","Continuity"],
+    questions: [
+      {
+        tag: "Safety · 0.22", tagClass: "tag-safety",
+        q: "Is anyone at home in danger right now, or at risk of being hurt?",
+        hint: "This includes physical harm, abuse, or an unsafe living situation.",
+        name: "safety",
+        opts: [
+          { text: "Yes, there is danger right now", val: 4 },
+          { text: "I am worried it could happen soon", val: 2 },
+          { text: "No, everyone is safe", val: 0 },
+        ]
+      },
+      {
+        tag: "Urgency · 0.18", tagClass: "tag-urgency",
+        q: "When do you need the money by?",
+        hint: "Pick the option that best describes your deadline.",
+        name: "urgency",
+        opts: [
+          { text: "Today or tomorrow", val: 4 },
+          { text: "Within the next 3 days", val: 3 },
+          { text: "Within the next 1 week", val: 2 },
+          { text: "Within the next 2 weeks", val: 1 },
+          { text: "I have more than 2 weeks, or no specific date", val: 0 },
+        ]
+      },
+      {
+        tag: "Vulnerability · 0.14", tagClass: "tag-vulnerability",
+        q: "Who is most affected by this situation?",
+        hint: "Pick the person who is in the most difficult position.",
+        name: "vulnerability",
+        opts: [
+          { text: "A baby or young child (under 6)", val: 4 },
+          { text: "A child (under 18), or someone who cannot care for themselves", val: 3 },
+          { text: "An elderly person, or someone with a serious illness or disability", val: 2 },
+          { text: "A pregnant person, or someone recovering from illness", val: 1 },
+          { text: "Mainly me (adult, generally able to manage)", val: 0 },
+        ]
+      },
+      {
+        tag: "Complexity · 0.12", tagClass: "tag-complexity",
+        q: "Before coming to us, did you ask for help anywhere else?",
+        hint: "For example: government agencies, mosques, churches, other charities.",
+        name: "complexity",
+        isTrigger: true,
+        triggerOpts: [
+          { text: "Yes", val: "yes-trigger" },
+          { text: "No, this is the first place I am trying", val: 0 },
+        ],
+        subQ: "How many places did you try, and what happened?",
+        subOpts: [
+          { text: "1 place — they could not help", val: 1 },
+          { text: "2–3 places — none could help", val: 2 },
+          { text: "4 or more places — all turned me away", val: 3 },
+          { text: "Many places over a long time — still no help", val: 4 },
+        ]
+      },
+      {
+        tag: "Legal duty · 0.14", tagClass: "tag-legal",
+        q: "Is there an official letter, court order, or government notice involved?",
+        hint: "For example: eviction notice, court summons, hospital discharge letter.",
+        name: "legal",
+        opts: [
+          { text: "Yes, and there is a deadline stated in it", val: 4 },
+          { text: "Yes, but no specific deadline is given", val: 2 },
+          { text: "No official letter or notice", val: 0 },
+        ]
+      },
+      {
+        tag: "Engagement · 0.10", tagClass: "tag-engagement",
+        q: "Can we reach you easily by phone or WhatsApp?",
+        hint: "We will need to contact you to continue with your application.",
+        name: "engagement",
+        opts: [
+          { text: "Yes — I can take calls or video calls anytime", val: 0 },
+          { text: "Yes, but only at certain times of day", val: 1 },
+          { text: "I prefer text or WhatsApp messages only, not calls", val: 2 },
+          { text: "I have limited phone access — hard to reach me", val: 3 },
+          { text: "I do not have a phone or reliable way to be contacted", val: 4 },
+        ],
+        hasLang: true,
+        langQ: "Do you need us to speak to you in a language other than English?",
+        langOpts: [
+          { text: "No, English is fine", val: 0 },
+          { text: "Yes — Mandarin / Malay / Tamil / Other", val: 1 },
+        ]
+      },
+      {
+        tag: "Continuity · 0.10", tagClass: "tag-continuity",
+        q: "Is this a one-time emergency, or has this been going on for a long time?",
+        hint: "",
+        name: "continuity",
+        opts: [
+          { text: "This just happened — it is a one-time emergency", val: 0 },
+          { text: "This has been a problem for a few weeks or months", val: 2 },
+          { text: "This has been going on for a long time — it keeps coming back", val: 4 },
+        ]
+      }
+    ]
+  },
+
+  ms: {
+    title: "Borang Pengutamaan Kes RoH",
+    subtitle: "Jawab setiap soalan. Skor keutamaan dikemas kini secara automatik.",
+    scoreLabel: "SKOR KEUTAMAAN",
+    flagText: "Kebimbangan keselamatan telah dikenal pasti — kes ini memerlukan semakan segera.",
+    reset: "↺ Mulakan semula",
+    submit: "Hantar →",
+    tyTitle: "Terima kasih kerana menghantar",
+    tyBody: "Kami telah menerima maklumat anda. Pasukan kami akan menghubungi anda tidak lama lagi.",
+    formSubtitle: "Sila jawab semua soalan supaya kami dapat memahami situasi anda.",
+    remaining: (n) => `${n} soalan lagi`,
+    bandLabels: { HIGH:"TINGGI", MEDIUM:"SEDERHANA", LOW:"RENDAH", UNSCORED:"Belum dinilai" },
+    response: {
+      HIGH:   "⏱ Hubungan pertama dalam 1 hari",
+      MEDIUM: "⏱ Hubungan pertama dalam 3 hari",
+      LOW:    "⏱ Hubungan pertama dalam 10 hari",
+      UNSCORED: "Jawab semua soalan untuk mendapat skor"
+    },
+    factors: ["Keselamatan","Kemendesakan","Kerentanan","Kerumitan","Kewajipan undang-undang","Penglibatan","Kesinambungan"],
+    questions: [
+      {
+        tag: "Keselamatan · 0.22", tagClass: "tag-safety",
+        q: "Adakah sesiapa di rumah dalam bahaya sekarang, atau berisiko dicederakan?",
+        hint: "Ini termasuk kecederaan fizikal, penderaan, atau situasi tempat tinggal yang tidak selamat.",
+        name: "safety",
+        opts: [
+          { text: "Ya, ada bahaya sekarang", val: 4 },
+          { text: "Saya bimbang ia mungkin berlaku tidak lama lagi", val: 2 },
+          { text: "Tidak, semua orang selamat", val: 0 },
+        ]
+      },
+      {
+        tag: "Kemendesakan · 0.18", tagClass: "tag-urgency",
+        q: "Bila anda memerlukan wang tersebut?",
+        hint: "Pilih pilihan yang paling menggambarkan tarikh akhir anda.",
+        name: "urgency",
+        opts: [
+          { text: "Hari ini atau esok", val: 4 },
+          { text: "Dalam masa 3 hari", val: 3 },
+          { text: "Dalam masa 1 minggu", val: 2 },
+          { text: "Dalam masa 2 minggu", val: 1 },
+          { text: "Saya ada lebih daripada 2 minggu, atau tiada tarikh tertentu", val: 0 },
+        ]
+      },
+      {
+        tag: "Kerentanan · 0.14", tagClass: "tag-vulnerability",
+        q: "Siapa yang paling terjejas oleh situasi ini?",
+        hint: "Pilih orang yang berada dalam kedudukan paling sukar.",
+        name: "vulnerability",
+        opts: [
+          { text: "Bayi atau kanak-kanak kecil (bawah 6 tahun)", val: 4 },
+          { text: "Kanak-kanak (bawah 18 tahun), atau seseorang yang tidak dapat menjaga diri sendiri", val: 3 },
+          { text: "Orang tua, atau seseorang dengan penyakit serius atau kecacatan", val: 2 },
+          { text: "Wanita hamil, atau seseorang yang sedang pulih daripada penyakit", val: 1 },
+          { text: "Terutamanya saya (dewasa, umumnya boleh mengurus diri)", val: 0 },
+        ]
+      },
+      {
+        tag: "Kerumitan · 0.12", tagClass: "tag-complexity",
+        q: "Sebelum datang ke sini, adakah anda meminta bantuan di tempat lain?",
+        hint: "Contohnya: agensi kerajaan, masjid, gereja, badan amal lain.",
+        name: "complexity",
+        isTrigger: true,
+        triggerOpts: [
+          { text: "Ya", val: "yes-trigger" },
+          { text: "Tidak, ini adalah tempat pertama yang saya cuba", val: 0 },
+        ],
+        subQ: "Berapa banyak tempat yang anda cuba, dan apa yang berlaku?",
+        subOpts: [
+          { text: "1 tempat — mereka tidak dapat membantu", val: 1 },
+          { text: "2–3 tempat — tiada yang dapat membantu", val: 2 },
+          { text: "4 tempat atau lebih — semua menolak saya", val: 3 },
+          { text: "Banyak tempat dalam masa lama — masih tiada bantuan", val: 4 },
+        ]
+      },
+      {
+        tag: "Kewajipan undang-undang · 0.14", tagClass: "tag-legal",
+        q: "Adakah terdapat surat rasmi, perintah mahkamah, atau notis kerajaan yang terlibat?",
+        hint: "Contohnya: notis pengusiran, saman mahkamah, surat keluar hospital.",
+        name: "legal",
+        opts: [
+          { text: "Ya, dan ada tarikh akhir dinyatakan di dalamnya", val: 4 },
+          { text: "Ya, tetapi tiada tarikh akhir tertentu diberikan", val: 2 },
+          { text: "Tiada surat rasmi atau notis", val: 0 },
+        ]
+      },
+      {
+        tag: "Penglibatan · 0.10", tagClass: "tag-engagement",
+        q: "Bolehkah kami menghubungi anda dengan mudah melalui telefon atau WhatsApp?",
+        hint: "Kami perlu menghubungi anda untuk meneruskan permohonan anda.",
+        name: "engagement",
+        opts: [
+          { text: "Ya — saya boleh menerima panggilan atau panggilan video bila-bila masa", val: 0 },
+          { text: "Ya, tetapi hanya pada waktu-waktu tertentu", val: 1 },
+          { text: "Saya lebih suka pesanan teks atau WhatsApp sahaja, bukan panggilan", val: 2 },
+          { text: "Akses telefon saya terhad — susah untuk dihubungi", val: 3 },
+          { text: "Saya tidak mempunyai telefon atau cara yang boleh dipercayai untuk dihubungi", val: 4 },
+        ],
+        hasLang: true,
+        langQ: "Adakah anda memerlukan kami bercakap dalam bahasa lain selain Bahasa Inggeris?",
+        langOpts: [
+          { text: "Tidak, Bahasa Inggeris tidak mengapa", val: 0 },
+          { text: "Ya — Mandarin / Melayu / Tamil / Lain-lain", val: 1 },
+        ]
+      },
+      {
+        tag: "Kesinambungan · 0.10", tagClass: "tag-continuity",
+        q: "Adakah ini kecemasan sekali sahaja, atau sudah berlaku dalam masa yang lama?",
+        hint: "",
+        name: "continuity",
+        opts: [
+          { text: "Ini baru sahaja berlaku — ia adalah kecemasan sekali sahaja", val: 0 },
+          { text: "Ini telah menjadi masalah selama beberapa minggu atau bulan", val: 2 },
+          { text: "Ini telah berlaku lama — ia terus berulang", val: 4 },
+        ]
+      }
+    ]
+  },
+
+  zh: {
+    title: "RoH 案例分类表格",
+    subtitle: "请回答每个问题。优先级分数将自动更新。",
+    scoreLabel: "优先级分数",
+    flagText: "⚠️ 已标记安全隐患——此案例需要立即进行人工审核。",
+    reset: "↺ 重置表格",
+    submit: "提交 →",
+    tyTitle: "感谢您的提交",
+    tyBody: "我们已收到您的信息。我们的团队将尽快与您联系。",
+    formSubtitle: "请回答所有问题，以便我们了解您的情况。",
+    remaining: (n) => `还有 ${n} 个问题`,
+    bandLabels: { HIGH:"高", MEDIUM:"中", LOW:"低", UNSCORED:"尚未评分" },
+    response: {
+      HIGH:   "⏱ 1天内首次联系",
+      MEDIUM: "⏱ 3天内首次联系",
+      LOW:    "⏱ 10天内首次联系",
+      UNSCORED: "请完成所有问题以获得分数"
+    },
+    factors: ["安全","紧迫性","脆弱性","复杂性","法律责任","参与度","持续性"],
+    questions: [
+      {
+        tag: "安全 · 0.22", tagClass: "tag-safety",
+        q: "家里现在有人处于危险中，或者有受伤的风险吗？",
+        hint: "包括身体伤害、虐待或不安全的居住环境。",
+        name: "safety",
+        opts: [
+          { text: "是的，现在有危险", val: 4 },
+          { text: "我担心这种情况可能很快发生", val: 2 },
+          { text: "没有，大家都很安全", val: 0 },
+        ]
+      },
+      {
+        tag: "紧迫性 · 0.18", tagClass: "tag-urgency",
+        q: "您需要在什么时候得到这笔钱？",
+        hint: "请选择最符合您截止日期的选项。",
+        name: "urgency",
+        opts: [
+          { text: "今天或明天", val: 4 },
+          { text: "3天内", val: 3 },
+          { text: "1周内", val: 2 },
+          { text: "2周内", val: 1 },
+          { text: "超过2周，或没有具体日期", val: 0 },
+        ]
+      },
+      {
+        tag: "脆弱性 · 0.14", tagClass: "tag-vulnerability",
+        q: "谁受这种情况影响最大？",
+        hint: "请选择处境最困难的人。",
+        name: "vulnerability",
+        opts: [
+          { text: "婴儿或幼童（6岁以下）", val: 4 },
+          { text: "儿童（18岁以下），或无法照顾自己的人", val: 3 },
+          { text: "老年人，或患有严重疾病或残疾的人", val: 2 },
+          { text: "孕妇，或正在康复中的人", val: 1 },
+          { text: "主要是我本人（成年人，基本上能自理）", val: 0 },
+        ]
+      },
+      {
+        tag: "复杂性 · 0.12", tagClass: "tag-complexity",
+        q: "在来找我们之前，您有没有在其他地方寻求过帮助？",
+        hint: "例如：政府机构、清真寺、教堂、其他慈善机构。",
+        name: "complexity",
+        isTrigger: true,
+        triggerOpts: [
+          { text: "有", val: "yes-trigger" },
+          { text: "没有，这是我第一次尝试的地方", val: 0 },
+        ],
+        subQ: "您尝试了多少个地方，结果如何？",
+        subOpts: [
+          { text: "1个地方——他们无法帮助", val: 1 },
+          { text: "2–3个地方——都无法帮助", val: 2 },
+          { text: "4个或更多地方——全部拒绝了我", val: 3 },
+          { text: "长期尝试了很多地方——仍然没有帮助", val: 4 },
+        ]
+      },
+      {
+        tag: "法律责任 · 0.14", tagClass: "tag-legal",
+        q: "是否涉及官方信件、法院命令或政府通知？",
+        hint: "例如：驱逐通知、法院传票、医院出院信。",
+        name: "legal",
+        opts: [
+          { text: "是的，其中有明确的截止日期", val: 4 },
+          { text: "是的，但没有给出具体的截止日期", val: 2 },
+          { text: "没有官方信件或通知", val: 0 },
+        ]
+      },
+      {
+        tag: "参与度 · 0.10", tagClass: "tag-engagement",
+        q: "我们可以通过电话或WhatsApp轻松联系到您吗？",
+        hint: "我们需要联系您以继续处理您的申请。",
+        name: "engagement",
+        opts: [
+          { text: "可以——我随时可以接听电话或视频通话", val: 0 },
+          { text: "可以，但只能在特定时间", val: 1 },
+          { text: "我更喜欢只发短信或WhatsApp消息，不接电话", val: 2 },
+          { text: "我的电话使用受限——很难联系到我", val: 3 },
+          { text: "我没有电话或可靠的联系方式", val: 4 },
+        ],
+        hasLang: true,
+        langQ: "您是否需要我们用英语以外的语言与您交流？",
+        langOpts: [
+          { text: "不需要，英语可以", val: 0 },
+          { text: "需要——普通话 / 马来语 / 泰米尔语 / 其他", val: 1 },
+        ]
+      },
+      {
+        tag: "持续性 · 0.10", tagClass: "tag-continuity",
+        q: "这是一次性的紧急情况，还是已经持续了很长时间？",
+        hint: "",
+        name: "continuity",
+        opts: [
+          { text: "这刚刚发生——这是一次性的紧急情况", val: 0 },
+          { text: "这个问题已经持续了几周或几个月", val: 2 },
+          { text: "这已经发生了很长时间——它不断重复", val: 4 },
+        ]
+      }
+    ]
+  },
+
+  ta: {
+    title: "RoH வழக்கு முன்னுரிமை படிவம்",
+    subtitle: "ஒவ்வொரு கேள்விக்கும் பதிலளிக்கவும். முன்னுரிமை மதிப்பெண் தானாகவே புதுப்பிக்கப்படும்.",
+    scoreLabel: "முன்னுரிமை மதிப்பெண்",
+    flagText: "⚠️ பாதுகாப்பு கவலை கண்டறியப்பட்டது — இந்த வழக்கிற்கு உடனடி மனித மதிப்பாய்வு தேவை.",
+    reset: "↺ மீண்டும் தொடங்கு",
+    submit: "சமர்ப்பி →",
+    tyTitle: "சமர்ப்பித்ததற்கு நன்றி",
+    tyBody: "உங்கள் தகவல்களை நாங்கள் பெற்றுள்ளோம். எங்கள் குழு விரைவில் உங்களை தொடர்பு கொள்ளும்.",
+    formSubtitle: "உங்கள் நிலைமையை நாங்கள் புரிந்துகொள்ள அனைத்து கேள்விகளுக்கும் பதிலளிக்கவும்.",
+    remaining: (n) => `இன்னும் ${n} கேள்விகள் உள்ளன`,
+    bandLabels: { HIGH:"அதிக முன்னுரிமை", MEDIUM:"நடுத்தர முன்னுரிமை", LOW:"குறைந்த முன்னுரிமை", UNSCORED:"மதிப்பிடப்படவில்லை" },
+    response: {
+      HIGH:   "⏱ 1 நாளுக்குள் முதல் தொடர்பு",
+      MEDIUM: "⏱ 3 நாட்களுக்குள் முதல் தொடர்பு",
+      LOW:    "⏱ 10 நாட்களுக்குள் முதல் தொடர்பு",
+      UNSCORED: "மதிப்பெண் பெற அனைத்து கேள்விகளையும் பூர்த்தி செய்யுங்கள்"
+    },
+    factors: ["பாதுகாப்பு","அவசரம்","பாதிப்பு","சிக்கல்","சட்டக் கடமை","ஈடுபாடு","தொடர்ச்சி"],
+    questions: [
+      {
+        tag: "பாதுகாப்பு · 0.22", tagClass: "tag-safety",
+        q: "இப்போது வீட்டில் யாரேனும் ஆபத்தில் இருக்கிறார்களா, அல்லது காயப்படும் அபாயம் உள்ளதா?",
+        hint: "உடல் ரீதியான தீங்கு, துஷ்பிரயோகம் அல்லது பாதுகாப்பற்ற வாழ்க்கை சூழல் ஆகியவை அடங்கும்.",
+        name: "safety",
+        opts: [
+          { text: "ஆம், இப்போது ஆபத்து உள்ளது", val: 4 },
+          { text: "அது விரைவில் நடக்கலாம் என்று நான் கவலைப்படுகிறேன்", val: 2 },
+          { text: "இல்லை, அனைவரும் பாதுகாப்பாக இருக்கிறார்கள்", val: 0 },
+        ]
+      },
+      {
+        tag: "அவசரம் · 0.18", tagClass: "tag-urgency",
+        q: "உங்களுக்கு எப்போது பணம் தேவை?",
+        hint: "உங்கள் கடைசி தேதியை சிறப்பாக விவரிக்கும் விருப்பத்தை தேர்வு செய்யுங்கள்.",
+        name: "urgency",
+        opts: [
+          { text: "இன்று அல்லது நாளை", val: 4 },
+          { text: "அடுத்த 3 நாட்களுக்குள்", val: 3 },
+          { text: "அடுத்த 1 வாரத்திற்குள்", val: 2 },
+          { text: "அடுத்த 2 வாரங்களுக்குள்", val: 1 },
+          { text: "எனக்கு 2 வாரங்களுக்கும் அதிகமான நேரம் உள்ளது, அல்லது குறிப்பிட்ட தேதி இல்லை", val: 0 },
+        ]
+      },
+      {
+        tag: "பாதிப்பு · 0.14", tagClass: "tag-vulnerability",
+        q: "இந்த சூழ்நிலையால் யார் அதிகம் பாதிக்கப்படுகிறார்கள்?",
+        hint: "மிகவும் கடினமான நிலையில் இருக்கும் நபரை தேர்வு செய்யுங்கள்.",
+        name: "vulnerability",
+        opts: [
+          { text: "குழந்தை அல்லது சிறு குழந்தை (6 வயதிற்கு கீழ்)", val: 4 },
+          { text: "குழந்தை (18 வயதிற்கு கீழ்), அல்லது தன்னை கவனித்துக் கொள்ள முடியாத நபர்", val: 3 },
+          { text: "முதியவர், அல்லது கடுமையான நோய் அல்லது ஊனமுற்றவர்", val: 2 },
+          { text: "கர்ப்பிணி, அல்லது நோயிலிருந்து மீண்டு வருபவர்", val: 1 },
+          { text: "முக்கியமாக நான் (பெரியவன், பொதுவாக சுயமாக நிர்வகிக்கும் திறன் கொண்டவன்)", val: 0 },
+        ]
+      },
+      {
+        tag: "சிக்கல் · 0.12", tagClass: "tag-complexity",
+        q: "எங்களிடம் வருவதற்கு முன்பு, வேறு எங்காவது உதவி கேட்டீர்களா?",
+        hint: "உதாரணமாக: அரசு நிறுவனங்கள், மசூதிகள், தேவாலயங்கள், பிற தொண்டு நிறுவனங்கள்.",
+        name: "complexity",
+        isTrigger: true,
+        triggerOpts: [
+          { text: "ஆம்", val: "yes-trigger" },
+          { text: "இல்லை, இது நான் முயற்சிக்கும் முதல் இடம்", val: 0 },
+        ],
+        subQ: "நீங்கள் எத்தனை இடங்களை முயற்சித்தீர்கள், என்ன நடந்தது?",
+        subOpts: [
+          { text: "1 இடம் — அவர்களால் உதவ முடியவில்லை", val: 1 },
+          { text: "2–3 இடங்கள் — எவரும் உதவ முடியவில்லை", val: 2 },
+          { text: "4 அல்லது அதிக இடங்கள் — அனைவரும் என்னை நிராகரித்தனர்", val: 3 },
+          { text: "நீண்ட காலமாக பல இடங்களில் — இன்னும் உதவி இல்லை", val: 4 },
+        ]
+      },
+      {
+        tag: "சட்டக் கடமை · 0.14", tagClass: "tag-legal",
+        q: "அதிகாரப்பூர்வ கடிதம், நீதிமன்ற உத்தரவு அல்லது அரசு அறிவிப்பு ஏதேனும் உள்ளதா?",
+        hint: "உதாரணமாக: வெளியேற்றும் நோட்டீஸ், நீதிமன்ற சம்மன், மருத்துவமனை டிஸ்சார்ஜ் கடிதம்.",
+        name: "legal",
+        opts: [
+          { text: "ஆம், அதில் கடைசி தேதி குறிப்பிடப்பட்டுள்ளது", val: 4 },
+          { text: "ஆம், ஆனால் குறிப்பிட்ட கடைசி தேதி இல்லை", val: 2 },
+          { text: "அதிகாரப்பூர்வ கடிதம் அல்லது அறிவிப்பு எதுவும் இல்லை", val: 0 },
+        ]
+      },
+      {
+        tag: "ஈடுபாடு · 0.10", tagClass: "tag-engagement",
+        q: "தொலைபேசி அல்லது WhatsApp மூலம் நாங்கள் உங்களை எளிதில் தொடர்பு கொள்ள முடியுமா?",
+        hint: "உங்கள் விண்ணப்பத்தை தொடர உங்களை தொடர்பு கொள்ள வேண்டும்.",
+        name: "engagement",
+        opts: [
+          { text: "ஆம் — எந்த நேரத்திலும் அழைப்புகள் அல்லது வீடியோ அழைப்புகளை ஏற்கலாம்", val: 0 },
+          { text: "ஆம், ஆனால் குறிப்பிட்ட நேரங்களில் மட்டுமே", val: 1 },
+          { text: "அழைப்புகள் இல்லாமல் SMS அல்லது WhatsApp செய்திகள் மட்டுமே விரும்புகிறேன்", val: 2 },
+          { text: "என் தொலைபேசி அணுகல் குறைவாக உள்ளது — என்னை அடைவது கடினம்", val: 3 },
+          { text: "என்னிடம் தொலைபேசி அல்லது நம்பகமான தொடர்பு வழி இல்லை", val: 4 },
+        ],
+        hasLang: true,
+        langQ: "ஆங்கிலம் தவிர வேறு மொழியில் பேச வேண்டுமா?",
+        langOpts: [
+          { text: "இல்லை, ஆங்கிலம் சரி", val: 0 },
+          { text: "ஆம் — மாண்டரின் / மலாய் / தமிழ் / பிற", val: 1 },
+        ]
+      },
+      {
+        tag: "தொடர்ச்சி · 0.10", tagClass: "tag-continuity",
+        q: "இது ஒரு முறை மட்டும் நடக்கும் அவசரநிலையா, அல்லது நீண்ட காலமாக நடந்து வருகிறதா?",
+        hint: "",
+        name: "continuity",
+        opts: [
+          { text: "இது இப்போது நடந்தது — இது ஒரு முறை மட்டும் நடக்கும் அவசரநிலை", val: 0 },
+          { text: "இது சில வாரங்கள் அல்லது மாதங்களாக பிரச்சனையாக உள்ளது", val: 2 },
+          { text: "இது நீண்ட காலமாக நடந்து வருகிறது — இது மீண்டும் மீண்டும் நடக்கிறது", val: 4 },
+        ]
+      }
+    ]
+  }
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let currentLang = 'en';
+const scores = { safety:null, urgency:null, vulnerability:null, complexity:null, legal:null, engagement:null, continuity:null };
+
+const FACTORS_KEYS = [
+  { key:'safety', weight:0.22, color:'#ef4444' },
+  { key:'urgency', weight:0.18, color:'#f59e0b' },
+  { key:'vulnerability', weight:0.14, color:'#8b5cf6' },
+  { key:'complexity', weight:0.12, color:'#f97316' },
+  { key:'legal', weight:0.14, color:'#3b82f6' },
+  { key:'engagement', weight:0.10, color:'#14b8a6' },
+  { key:'continuity', weight:0.10, color:'#22c55e' },
+];
+
+const BAND_THRESHOLDS = [
+  { min:70, key:'HIGH' }, { min:40, key:'MEDIUM' }, { min:0, key:'LOW' }
+];
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function renderAll() {
+  const lang = T[currentLang];
+  document.body.className = `lang-${currentLang}${FORM_MODE ? ' form-mode' : ''}`;
+  document.getElementById('ui-title').textContent = lang.title;
+  document.getElementById('ui-subtitle').textContent = FORM_MODE ? lang.formSubtitle : lang.subtitle;
+  document.getElementById('ui-score-label').textContent = lang.scoreLabel;
+  document.getElementById('flag-text').textContent = lang.flagText;
+  document.getElementById('reset-btn').textContent = lang.reset;
+  const submitLabelEl = document.getElementById('submit-label');
+  if (submitLabelEl) submitLabelEl.textContent = lang.submit || 'Submit →';
+
+  // factor bars
+  const barsEl = document.getElementById('factor-bars');
+  barsEl.innerHTML = '';
+  FACTORS_KEYS.forEach((f,i) => {
+    barsEl.innerHTML += `
+      <div class="factor-row">
+        <div class="factor-label"><span>${lang.factors[i]}</span><span id="bar-val-${f.key}">—</span></div>
+        <div class="bar-track"><div class="bar-fill" id="bar-${f.key}" style="width:0%;background:${f.color}"></div></div>
+      </div>`;
+  });
+
+  // questions
+  const container = document.getElementById('questions-container');
+  container.innerHTML = '';
+  lang.questions.forEach((q, qi) => {
+    const sec = document.createElement('div');
+    sec.className = 'section';
+    sec.id = `section-${q.name}`;
+
+    let optsHTML = '';
+    if (q.isTrigger) {
+      optsHTML = `<div class="options" id="q-${q.name}">`;
+      q.triggerOpts.forEach(o => {
+        const scoreDisp = o.val === 'yes-trigger' ? '—' : o.val;
+        optsHTML += `<label class="opt-label"><input type="radio" name="${q.name}" value="${o.val}"> <span class="opt-dot"></span> ${o.text} <span class="opt-score">${scoreDisp}</span></label>`;
+      });
+      optsHTML += `</div>
+      <div class="sub-q" id="sub-${q.name}" style="display:none;">
+        <div class="q-text">${q.subQ}</div>
+        <div class="options" id="q-${q.name}-sub">`;
+      q.subOpts.forEach(o => {
+        optsHTML += `<label class="opt-label"><input type="radio" name="${q.name}-sub" value="${o.val}"> <span class="opt-dot"></span> ${o.text} <span class="opt-score">${o.val}</span></label>`;
+      });
+      optsHTML += `</div></div>`;
+    } else if (q.hasLang) {
+      optsHTML = `<div class="options" id="q-${q.name}">`;
+      q.opts.forEach(o => {
+        optsHTML += `<label class="opt-label"><input type="radio" name="${q.name}" value="${o.val}"> <span class="opt-dot"></span> ${o.text} <span class="opt-score">${o.val}</span></label>`;
+      });
+      optsHTML += `</div>
+      <div class="sub-q" style="margin-top:14px;">
+        <div class="q-text">${q.langQ}</div>
+        <div class="options" id="q-language">`;
+      q.langOpts.forEach(o => {
+        optsHTML += `<label class="opt-label"><input type="radio" name="language" value="${o.val}"> <span class="opt-dot"></span> ${o.text} <span class="opt-score">+${o.val}</span></label>`;
+      });
+      optsHTML += `</div></div>`;
+    } else {
+      optsHTML = `<div class="options" id="q-${q.name}">`;
+      q.opts.forEach(o => {
+        optsHTML += `<label class="opt-label"><input type="radio" name="${q.name}" value="${o.val}"> <span class="opt-dot"></span> ${o.text} <span class="opt-score">${o.val}</span></label>`;
+      });
+      optsHTML += `</div>`;
+    }
+
+    sec.innerHTML = `
+      <span class="section-tag ${q.tagClass}">${q.tag}</span>
+      <div class="q-text">${q.q}</div>
+      ${q.hint ? `<div class="q-hint">${q.hint}</div>` : ''}
+      ${optsHTML}`;
+    container.appendChild(sec);
+  });
+
+  // Re-attach listeners
+  document.querySelectorAll('.opt-label').forEach(label => {
+    label.addEventListener('click', function() {
+      const radio = this.querySelector('input');
+      const name = radio.name;
+      document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
+        r.closest('.opt-label').classList.remove('selected');
+      });
+      this.classList.add('selected');
+      recalc();
+    });
+  });
+
+  // Restore selections
+  Object.keys(scores).forEach(k => {
+    if (scores[k] !== null && k !== 'engagement') {
+      // handled below
+    }
+  });
+
+  recalc();
+}
+
+// ─── RECALC ──────────────────────────────────────────────────────────────────
+function recalc() {
+  function getVal(name) {
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : null;
+  }
+
+  // Safety
+  const sv = getVal('safety'); scores.safety = sv !== null ? parseFloat(sv) : null;
+
+  // Urgency
+  const uv = getVal('urgency'); scores.urgency = uv !== null ? parseFloat(uv) : null;
+
+  // Vulnerability
+  const vv = getVal('vulnerability'); scores.vulnerability = vv !== null ? parseFloat(vv) : null;
+
+  // Complexity (trigger)
+  const cv = getVal('complexity');
+  const subEl = document.getElementById('sub-complexity');
+  if (cv === 'yes-trigger') {
+    if (subEl) subEl.style.display = 'block';
+    const csv = getVal('complexity-sub');
+    scores.complexity = csv !== null ? parseFloat(csv) : null;
+  } else if (cv !== null) {
+    if (subEl) subEl.style.display = 'none';
+    scores.complexity = parseFloat(cv);
+  } else {
+    if (subEl) subEl.style.display = 'none';
+    scores.complexity = null;
+  }
+
+  // Legal
+  const lv = getVal('legal'); scores.legal = lv !== null ? parseFloat(lv) : null;
+
+  // Engagement = phone + language
+  const pv = getVal('engagement');
+  const langv = getVal('language');
+  if (pv !== null && langv !== null) scores.engagement = Math.min(4, parseFloat(pv) + parseFloat(langv));
+  else if (pv !== null) scores.engagement = parseFloat(pv);
+  else scores.engagement = null;
+
+  // Continuity
+  const cov = getVal('continuity'); scores.continuity = cov !== null ? parseFloat(cov) : null;
+
+  // Safety flag
+  document.getElementById('safety-flag').classList.toggle('show', scores.safety === 4);
+
+  // Update bars
+  FACTORS_KEYS.forEach(f => {
+    const v = scores[f.key];
+    const pct = v !== null ? (v / 4) * 100 : 0;
+    const barEl = document.getElementById(`bar-${f.key}`);
+    const valEl = document.getElementById(`bar-val-${f.key}`);
+    if (barEl) barEl.style.width = pct + '%';
+    if (valEl) valEl.textContent = v !== null ? `${v}/4` : '—';
+  });
+
+  const lang = T[currentLang];
+  const scoreEl = document.getElementById('total-score');
+  const pillEl = document.getElementById('band-pill');
+  const bannerEl = document.getElementById('response-banner');
+
+  const allAnswered = FACTORS_KEYS.every(f => scores[f.key] !== null);
+
+  const dashboard = document.querySelector('.dashboard');
+  if (allAnswered) {
+    let total = 0;
+    FACTORS_KEYS.forEach(f => { total += scores[f.key] * f.weight; });
+    const scaled = Math.round(total * 25);
+    scoreEl.textContent = scaled;
+    const band = BAND_THRESHOLDS.find(b => scaled >= b.min);
+    pillEl.className = `band-pill band-${band.key}`;
+    pillEl.textContent = lang.bandLabels[band.key];
+    bannerEl.className = `response-banner rb-${band.key}`;
+    bannerEl.textContent = lang.response[band.key];
+    scoreEl.className = `score-big score-${band.key}`;
+    dashboard.className = `dashboard dashboard-${band.key}`;
+  } else {
+    const answeredCount = FACTORS_KEYS.filter(f => scores[f.key] !== null).length;
+    const remaining = 7 - answeredCount;
+    scoreEl.textContent = '—';
+    scoreEl.className = 'score-big';
+    pillEl.className = 'band-pill band-UNSCORED';
+    pillEl.textContent = lang.bandLabels.UNSCORED;
+    bannerEl.className = 'response-banner rb-UNSCORED';
+    bannerEl.textContent = lang.remaining(remaining);
+    dashboard.className = 'dashboard';
+  }
+  updateFormProgress();
+}
+
+// ─── MODE DETECTION ──────────────────────────────────────────────────────────
+const FORM_MODE = new URLSearchParams(window.location.search).get('mode') === 'form';
+
+if (FORM_MODE) {
+  document.body.classList.add('form-mode');
+  document.getElementById('admin-banner').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('submit-btn').style.display = 'block';
+}
+
+// ─── PROGRESS + SUBMIT ENABLE ────────────────────────────────────────────────
+function updateFormProgress() {
+  if (!FORM_MODE) return;
+  const answered = FACTORS_KEYS.filter(f => scores[f.key] !== null).length;
+  const pct = Math.round((answered / FACTORS_KEYS.length) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  const submitBtn = document.getElementById('submit-btn');
+  const allDone = FACTORS_KEYS.every(f => scores[f.key] !== null);
+  submitBtn.disabled = !allDone;
+}
+
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzTFY02W-7AFOX0od6hjKSMQeBf_hfEWUo9VFxse_m-OrDik5gsmLE2MXAD9oaDA9Li/exec';
+
+function submitForm() {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span>Sending...</span>';
+
+  // Calculate final score and band
+  let total = 0;
+  FACTORS_KEYS.forEach(f => { total += (scores[f.key] || 0) * f.weight; });
+  const scaled = Math.round(total * 25);
+  const band = BAND_THRESHOLDS.find(b => scaled >= b.min);
+
+  const payload = {
+    language: currentLang,
+    band: band.key,
+    score: scaled,
+    safety:        scores.safety,
+    urgency:       scores.urgency,
+    vulnerability: scores.vulnerability,
+    complexity:    scores.complexity,
+    legal:         scores.legal,
+    engagement:    scores.engagement,
+    continuity:    scores.continuity
+  };
+
+  // Send to Google Sheets (no-cors so we can't read response, but it still posts)
+  fetch(SHEETS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .catch(() => {}) // silently ignore network errors on no-cors
+  .finally(() => {
+    // Always show thank-you regardless — don't leave user hanging
+    document.getElementById('questions-container').style.display = 'none';
+    document.getElementById('submit-btn').style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.querySelector('.lang-bar').style.display = 'none';
+    const lang = T[currentLang];
+    document.getElementById('ty-title').textContent = lang.tyTitle;
+    document.getElementById('ty-body').textContent = lang.tyBody;
+    document.getElementById('thankyou').classList.add('show');
+  });
+}
+
+// ─── LANGUAGE SWITCH ─────────────────────────────────────────────────────────
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  Object.keys(scores).forEach(k => scores[k] = null);
+  renderAll();
+}
+
+function resetForm() {
+  Object.keys(scores).forEach(k => scores[k] = null);
+  document.getElementById('thankyou').classList.remove('show');
+  document.getElementById('questions-container').style.display = 'block';
+  document.getElementById('reset-btn').style.display = '';
+  if (FORM_MODE) {
+    document.getElementById('submit-btn').style.display = 'block';
+    document.getElementById('progress-wrap').style.display = 'block';
+    document.querySelector('.lang-bar').style.display = 'flex';
+  }
+  renderAll();
+}
+
+// Initial render
+renderAll();
+</script>
+</body>
+</html>
