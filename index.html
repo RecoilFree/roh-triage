@@ -902,11 +902,9 @@ function submitForm() {
   };
 
   // Send to Google Sheets (no-cors so we can't read response, but it still posts)
-  fetch(SHEETS_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload)
+  fetch(SHEETS_URL + '?' + new URLSearchParams(payload), {
+    method: 'GET',
+    mode: 'no-cors'
   })
   .catch(() => {}) // silently ignore network errors on no-cors
   .finally(() => {
